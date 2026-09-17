@@ -42,7 +42,14 @@ import { groupByThread, groupConsumers, readProcesses, totalsByKind } from "./li
 import { applyRelief, buildPlan, type RelieveConfig } from "./lib/relieve";
 import { Store, MIGRATIONS } from "./lib/store";
 import { cadenceMs, parseLines, parsePorts } from "./lib/policy";
-import { ellipsize, formatBytes, formatPercent, formatRate, padBytes } from "./lib/format";
+import {
+  ellipsize,
+  formatBytes,
+  formatLocalStamp,
+  formatPercent,
+  formatRate,
+  padBytes,
+} from "./lib/format";
 import { levelLabel } from "./lib/ui";
 
 export const rpcContract = defineRpcContract(rpcShape);
@@ -478,15 +485,26 @@ export default async function plugin(bb: BbPluginApi) {
     return { plan, snap: current };
   }
 
+  /**
+   * Nudge a thread that is running right now — and nothing else.
+   *
+   * Two rules, both learned the hard way. A message must never land in the
+   * human composer inbox: that queue is for a person, it waits until the
+   * thread is free, and a note about memory pressure read twenty minutes late
+   * is noise addressed to the wrong reader. And an idle thread is not the one
+   * allocating, so there is nothing to ask it for.
+   *
+   * So the running set is checked first and the mode is plain `steer`. A
+   * thread that is not running is skipped, not queued.
+   */
   async function steerThread(threadId: string, message: string): Promise<void> {
+    const running = await bb.sdk.threads.listRunning().catch(() => []);
+    if (!running.some((row) => row.id === threadId)) {
+      throw new Error("thread is not running — skipped rather than queued to the inbox");
+    }
     await bb.sdk.threads.send({
       threadId,
-      // Steer, never queue: a queued message sits in the human composer inbox
-      // until the thread is free, which is exactly the wrong latency for a
-      // machine that is out of memory now. On an idle thread this is a no-op
-      // rather than a new turn, which is also correct — an idle thread is not
-      // the one allocating.
-      mode: "steer-if-active",
+      mode: "steer",
       input: [{ type: "text", text: message, mentions: [] }],
     });
   }
@@ -580,6 +598,27 @@ export default async function plugin(bb: BbPluginApi) {
       };
     }
     const { plan } = await makePlan(config, snap);
+
+    /**
+     * Do not spawn an agent that has nothing to do.
+     *
+     * The guard escalated twice on this machine with "0 B safe to reclaim" and
+     * no thread worth steering. There was no action available to it, so the
+     * thread could only report back or ask a question — which is the one thing
+     * an unattended escalation must never do. Pressure with no remedy is a
+     * fact for the activity log, not a reason to start an agent.
+     */
+    const actionable = plan.candidates.filter((row) => row.risk !== "protected");
+    if (actionable.length === 0) {
+      return {
+        threadId: null,
+        started: false,
+        message:
+          "Nothing actionable: no disposable processes and no running thread to ask. " +
+          "Logged the pressure instead of starting an agent that could only report it.",
+      };
+    }
+
     const prompt = [
       "This machine is out of memory and needs a decision that a fixed rule cannot make.",
       "",
@@ -593,20 +632,29 @@ export default async function plugin(bb: BbPluginApi) {
       "",
       note === undefined || note.trim() === "" ? "" : `Operator note: ${note.trim()}`,
       "",
-      "You have the Ballast tools. Work in this order:",
+      "**Work autonomously and finish in one turn. Do not ask the user anything.**",
+      "Nobody is waiting at the keyboard — this thread was started by a background guard because the",
+      "machine was already paging. A question here does not get answered; it just leaves the machine",
+      "in trouble with a thread parked on a prompt. If you are unsure whether an action is warranted,",
+      "the answer is to not take it and to say so in your summary.",
+      "",
+      "Work in this order:",
       "1. `ballast_status` for the current numbers — they will have moved since this prompt was written.",
       "2. `ballast_plan` for candidates and their ids.",
-      "3. Prefer asking over killing. If a BB thread is holding the memory, message it with",
-      "   `bb thread tell <id>` and ask it to close browsers and stop dev servers. That costs a turn;",
-      "   killing its processes costs its work.",
-      "4. `ballast_relieve` with `dryRun: true`, check the total, then apply the `safe` candidates.",
-      "5. Leave `disruptive` candidates alone unless nothing else gets headroom above the threshold,",
-      "   and say in your summary which ones you took and why.",
+      "3. `ballast_relieve` with `dryRun: true` on the `safe` ids, check the total, then apply them.",
+      "4. Prefer asking a thread over killing its processes. The plan's `steer:` candidates do this",
+      "   through `ballast_relieve` — that routes to threads that are running right now and never",
+      "   queues. Do **not** use `bb thread tell` or `bb thread queue`: those can land in the user's",
+      "   composer inbox, where a memory warning is read long after it mattered, by the wrong reader.",
+      "5. Leave `disruptive` candidates alone unless nothing else gets headroom above the threshold.",
+      "   If you take one, say which and why.",
       "",
       "Ballast only ever signals processes it classified as disposable, and never agents, editors,",
       "browsers, containers or anything it could not identify. Do not use `kill` directly to work",
-      "around that boundary.",
-      "Finish with a short summary: what you freed, how much headroom came back, and what is left.",
+      "around that boundary, and do not change Ballast's settings to widen it.",
+      "",
+      "Finish with a short summary: what you freed, how much headroom came back, what you chose not",
+      "to touch, and what a human should decide later. Then stop — do not poll or wait.",
     ]
       .filter((line) => line !== undefined)
       .join("\n");
@@ -616,6 +664,12 @@ export default async function plugin(bb: BbPluginApi) {
         projectId: config.escalationProjectId,
         environment: { type: "project-default" },
         prompt,
+        // Nobody is at the keyboard. A thread that stops on an approval prompt
+        // is worse than no thread at all: the machine stays in trouble and a
+        // parked prompt is the only evidence. The blast radius is bounded by
+        // Ballast's own gate rather than by per-call approvals — relieve takes
+        // only ids the plan minted and re-checks them against the live table.
+        permissionMode: "full",
         title: `Memory pressure — ${formatBytes(snap.pressure.sample.headroomBytes)} headroom`,
       });
       return {
@@ -1200,7 +1254,11 @@ export default async function plugin(bb: BbPluginApi) {
           if (events.length === 0) return ok("The guard has not done anything yet.");
           const lines = events.map(
             (event) =>
-              `${new Date(event.atMs).toISOString().slice(5, 16).replace("T", " ")}  ` +
+              // Local time, not UTC. An activity log is read against the
+              // user's own memory of what they were doing, and printing
+              // "23:26" for something that happened at 19:26 made a stale
+              // event look like it had just fired.
+              `${formatLocalStamp(event.atMs)}  ` +
               `${event.level.padEnd(8)} ${event.action.padEnd(10)} ${event.detail}`,
           );
           return ok(lines.join("\n"));

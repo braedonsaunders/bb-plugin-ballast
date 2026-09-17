@@ -347,7 +347,7 @@ export function SettingsPanel({ onChanged }: { onChanged?: () => void }) {
           checked={config.agentEscalation}
           onChange={(agentEscalation) => patch({ agentEscalation })}
           label="4. Hand the problem to an agent"
-          hint="At critical, when the deterministic rungs have not been enough. Starts one thread, at most once every 20 minutes."
+          hint="At critical, and only when there is something it could actually do. Starts one thread, at most once every 20 minutes, and runs it unattended with full permissions so it does not stall on an approval nobody is there to give."
         />
         {config.agentEscalation ? (
           <label className="block">

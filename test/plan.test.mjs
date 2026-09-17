@@ -145,3 +145,35 @@ test("steering a thread is always disruptive and never counted as freed bytes", 
   assert.equal(plan.safeBytes, 0);
   assert.equal(plan.disruptiveBytes, 0);
 });
+
+test("a plan with nothing but refusals has no actionable candidate", () => {
+  // Regression: the guard escalated twice with "0 B safe to reclaim" and no
+  // thread to ask, spawning an agent whose only possible move was to ask the
+  // user a question — the one thing an unattended escalation must not do.
+  // `escalate` now checks for exactly this emptiness before spawning.
+  const plan = buildPlan({
+    consumers: [consumer({ kind: "agent", bytes: 4 * 1024 ** 3 })],
+    threadConsumers: [],
+    rows: [row({ kind: "agent" })],
+    config,
+    selfPids: new Set(),
+    steerLimit: 3,
+  });
+  const actionable = plan.candidates.filter((c) => c.risk !== "protected");
+  assert.equal(actionable.length, 0);
+  assert.equal(plan.safeBytes, 0);
+});
+
+test("steer candidates exist only when a thread is actually holding memory", () => {
+  const plan = buildPlan({
+    consumers: [],
+    threadConsumers: [consumer({ id: "t", threadId: "thr_x", bytes: 2 * 1024 ** 3 })],
+    rows: [],
+    config,
+    selfPids: new Set(),
+    steerLimit: 3,
+  });
+  const actionable = plan.candidates.filter((c) => c.risk !== "protected");
+  assert.equal(actionable.length, 1);
+  assert.equal(actionable[0].action, "steer");
+});

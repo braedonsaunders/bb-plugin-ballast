@@ -71,6 +71,20 @@ export function formatDuration(ms: number): string {
   return `${hours}h ${minutes - hours * 60}m`;
 }
 
+/**
+ * `MM-DD HH:MM` in the machine's own timezone, for the activity log.
+ *
+ * Local, not UTC. An activity log is read against the reader's memory of what
+ * they were doing; printing 23:26 for something that happened at 19:26 made a
+ * stale event look like it had just fired, and cost an hour of chasing a bug
+ * that had already been fixed.
+ */
+export function formatLocalStamp(atMs: number): string {
+  const at = new Date(atMs);
+  const pad = (value: number): string => String(value).padStart(2, "0");
+  return `${pad(at.getMonth() + 1)}-${pad(at.getDate())} ${pad(at.getHours())}:${pad(at.getMinutes())}`;
+}
+
 /** Relative age, for "last sampled" and "running for" labels. */
 export function formatAgo(atMs: number | null, nowMs = Date.now()): string {
   if (atMs === null || !Number.isFinite(atMs)) return "never";

@@ -58,6 +58,11 @@ Ballast reports and plans on a fresh install; it stops nothing.
 | Stop disposable processes | whatever it stops | critical |
 | Hand the problem to an agent | a thread, once per 20 min | critical |
 
+Escalation runs the spawned thread unattended with full permissions — an agent
+that stalls on an approval prompt is useless when nobody is at the keyboard —
+and it only starts when the plan has something actionable in it. Steering goes
+only to threads that are running right now, never to the composer inbox.
+
 ## What it will not stop
 
 Candidates are only ever headless browsers, dev servers, test runners and build
