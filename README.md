@@ -48,7 +48,8 @@ intervention possible: you can steer a thread, but you cannot steer a PID.
 
 ## The ladder
 
-Four rungs in order of cost. All of them off by default except where noted.
+Four rungs in order of cost. **All of them are off until you turn them on.**
+Ballast reports and plans on a fresh install; it stops nothing.
 
 | Rung | Costs | Fires at |
 |---|---|---|

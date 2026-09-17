@@ -163,11 +163,21 @@ export default async function plugin(bb: BbPluginApi) {
       default: DEFAULT_THRESHOLDS.swapRateMbPerMin,
     },
     sampleSeconds: { type: "number", label: "Sample every (seconds)", default: 10 },
+    /**
+     * Off by default, and it earned that.
+     *
+     * This shipped as "safe" and the first thing it did on a real machine was
+     * terminate BB's own `esbuild --service` for idling at 0% CPU. The rule is
+     * fixed and covered by tests, but a plugin that stops processes has to be
+     * switched on deliberately: the cost of a wrong classification is someone
+     * else's tooling, and nobody installs a memory monitor expecting it to
+     * start killing things before they have looked at it once.
+     */
     autoRelieve: {
       type: "select",
       label: "Automatically stop processes under pressure",
       options: ["off", "safe", "aggressive"],
-      default: "safe",
+      default: "off",
     },
     // Empty by default, and it must stay that way. A shipped port list is one
     // machine's conventions imposed on everyone else's.
