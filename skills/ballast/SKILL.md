@@ -1,0 +1,67 @@
+---
+name: ballast
+description: "Diagnose and relieve physical memory pressure on this machine. Use when a build or test run is killed, a command hangs or crawls, the machine starts paging, the user asks what is eating their RAM, or Ballast escalates memory pressure to you."
+---
+
+# Memory pressure
+
+Ballast reads physical memory and attributes it to process trees and BB
+threads. Use its tools instead of `top`, `vm_stat`, `ps` or `memory_pressure`.
+
+## Read the numbers first
+
+`ballast_status` reports used, headroom, swap, compression, and the largest
+consumers grouped by tree and by thread.
+
+The number that matters is **headroom** — free plus clean file cache plus
+purgeable — not "% used". A machine at 90% used with 6 GB of cached files is
+healthy; the same machine with 400 MB of headroom and a non-zero paging rate is
+in trouble. `memory_pressure`'s "free percentage" is not a substitute: it counts
+inactive pages as free and stays reassuring while the machine swaps.
+
+`paging in` above zero means the machine is already reading memory back off
+disk. That is the signal to act on. Swap that is merely *resident* is not —
+pages parked there since yesterday cost nothing.
+
+## Relieve it
+
+1. `ballast_plan` lists candidates with ids, graded `safe` or `disruptive`, plus
+   anything refused and why.
+2. **Prefer asking over killing.** If a BB thread is holding the memory, message
+   it with `bb thread tell <id>` and ask it to close Playwright browsers and
+   stop dev servers. That costs the thread a turn. Killing its processes costs
+   its work.
+3. `ballast_relieve` with `dryRun: true`, check the total, then apply.
+4. Take `disruptive` candidates only when nothing else gets headroom above the
+   threshold, and say which ones you took.
+
+## The boundary
+
+`ballast_relieve` takes only ids that `ballast_plan` minted, and re-checks each
+one against the live process table before signalling it — a recycled PID is
+refused, not killed.
+
+It will only ever stop four kinds of process — headless browsers, dev servers,
+test runners and build tools — and only when nothing can still be waiting on
+them: the process is orphaned, or it has burned no CPU for longer than the
+configured idle window. An idle dev server is deliberately *not* safe, because
+idle is a server's resting state.
+
+Agents, BB itself, editors, interactive browsers, containers, system processes,
+anything owned by another user, anything younger than a minute, anything on a
+protected port, and anything it could not confidently classify are refused by
+construction.
+
+Do not use `kill`, `pkill` or `killall` to work around that boundary. If you
+believe something outside it must be stopped, say so and let the user decide.
+
+## Commands
+
+```sh
+bb ballast status              # pressure and the signals behind it
+bb ballast top --limit 20      # largest consumers, by tree and by thread
+bb ballast plan                # candidates with ids
+bb ballast relieve --safe      # dry run; add --yes to apply
+bb ballast log                 # what the guard has done
+bb ballast restore             # undo a concurrency throttle
+```
