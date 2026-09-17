@@ -123,9 +123,28 @@ const SYSTEM_PATTERNS =
 const INTERPRETER_NAMES =
   /^(sh|bash|zsh|fish|dash|ksh|csh|tcsh|env|xargs|timeout|nohup|sudo|script|expect|login|tmux|screen)$/;
 
+/**
+ * Long-lived tool *servers*, which are infrastructure rather than build steps.
+ *
+ * `esbuild --service=...`, a TypeScript server, a language server and a file
+ * watcher all sit at zero CPU between requests for as long as their host is
+ * open. Treating them as build tools and killing them for being idle is not a
+ * reclaim — it silently breaks the thing that spawned them, and it does not
+ * come back.
+ *
+ * This is not hypothetical. An earlier version of this plugin classified
+ * `esbuild --service` as `toolchain`, found it idle, and terminated it. It was
+ * BB's own bundler: every plugin install afterwards failed with "The service
+ * is no longer running" until BB was restarted. The plugin broke its own
+ * install path by reclaiming 141 MB.
+ */
+const TOOL_SERVICE_PATTERNS =
+  /(--service=|\btsserver\b|language-?server|\bwatchman\b|\bdaemon\b|--watch\b|\besbuild\b.*--serve)/i;
+
 export function classify(command: string, name: string): ProcessKind {
   if (SYSTEM_PATTERNS.test(name)) return "system";
   if (INTERPRETER_NAMES.test(name)) return "other";
+  if (TOOL_SERVICE_PATTERNS.test(command)) return "other";
   if (isAutomationBrowser(command)) return "browser-automation";
   if (BB_PATTERNS.test(command)) return "bb";
   if (AGENT_PATTERNS.test(command)) return "agent";

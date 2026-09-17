@@ -43,9 +43,14 @@ refused, not killed.
 
 It will only ever stop four kinds of process — headless browsers, dev servers,
 test runners and build tools — and only when nothing can still be waiting on
-them: the process is orphaned, or it has burned no CPU for longer than the
-configured idle window. An idle dev server is deliberately *not* safe, because
-idle is a server's resting state.
+them. In practice that means **orphaned**: reparented to init, so whatever
+launched it is gone. The one exception is a headless browser idle at no CPU
+past the configured window, which is the ordinary shape of a leak from a
+finished suite.
+
+Idle alone is never enough for anything else. A process with a live parent is
+being held by it, and a build tool or language server sitting at 0% CPU is a
+worker waiting for its next request, not a corpse.
 
 Agents, BB itself, editors, interactive browsers, containers, system processes,
 anything owned by another user, anything younger than a minute, anything on a

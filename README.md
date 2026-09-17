@@ -60,9 +60,11 @@ Four rungs in order of cost. All of them off by default except where noted.
 ## What it will not stop
 
 Candidates are only ever headless browsers, dev servers, test runners and build
-tools, and only when nothing can still be waiting on them — orphaned, or idle
-at no CPU beyond the configured window. An idle dev server is not safe: idle is
-a dev server's resting state.
+tools, and only when nothing can still be waiting on them — in practice,
+orphaned. The one exception is a headless browser idle at no CPU past the
+window. A process with a live parent is being held by it, so idle alone never
+makes one safe: a language server or bundler at 0% CPU is waiting for work, not
+finished.
 
 Refused by construction: agents, BB itself, editors, your browser, containers,
 system processes, other users' processes, anything under a minute old, anything

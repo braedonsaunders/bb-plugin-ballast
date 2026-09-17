@@ -150,7 +150,7 @@ const AUTO_RELIEVE_OPTIONS: Array<{ value: Config["autoRelieve"]; label: string;
   {
     value: "safe",
     label: "Safe only",
-    hint: "Orphaned and idle processes, at critical pressure.",
+    hint: "Orphaned processes and abandoned headless browsers, at critical pressure.",
   },
   {
     value: "aggressive",
@@ -257,7 +257,7 @@ export function SettingsPanel({ onChanged }: { onChanged?: () => void }) {
 
       <Section
         title="What may be stopped"
-        description="Only idle headless browsers, orphaned dev servers, and finished test and build processes are ever candidates. Agents, editors, browsers, containers, system processes and anything unrecognised are refused by construction."
+        description="A process is only a safe candidate when nothing can still be waiting on it: it is orphaned, or it is a headless browser idle at no CPU. Agents, editors, browsers, containers, long-lived tool services, system processes and anything unrecognised are refused by construction."
       >
         <NumberField
           label="Counts as idle after"

@@ -52,9 +52,10 @@ that triggered it.
 
 Only four kinds of process are ever candidates: headless browsers, dev servers,
 test runners and build tools — and only when nothing can still be waiting on
-them, meaning the process is orphaned or has burned no CPU for longer than the
-idle window. An idle dev server is deliberately not safe; idle is a dev
-server's resting state.
+them, which in practice means orphaned. The one exception is a headless browser
+idle at no CPU, the ordinary shape of a leak from a finished suite. A process
+whose parent is still alive is being held by it, so idle alone never makes one
+safe.
 
 Agents, BB itself, editors, your own browser, containers, system processes,
 anything owned by another user, anything younger than a minute, and anything

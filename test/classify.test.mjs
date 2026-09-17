@@ -97,6 +97,23 @@ test("a shell is never classified by what its arguments mention", () => {
   assert.equal(kindOf("/repo/node_modules/.bin/tsc --noEmit"), "toolchain");
 });
 
+test("a long-lived tool service is never classified as a build step", () => {
+  // Regression: BB's own bundler runs as `esbuild --service=...` and idles at
+  // 0% CPU between requests. Classified as `toolchain` it became killable, and
+  // killing it broke every subsequent plugin install until BB restarted.
+  assert.equal(
+    kindOf("/repo/node_modules/@esbuild/darwin-arm64/bin/esbuild --service=0.25.0 --ping"),
+    "other",
+  );
+  assert.equal(kindOf("node /usr/lib/node_modules/typescript/lib/tsserver.js"), "other");
+  assert.equal(kindOf("/opt/homebrew/bin/watchman --foreground"), "other");
+  assert.equal(kindOf("node /repo/node_modules/.bin/tsc --watch"), "other");
+  assert.equal(kindOf("vscode-json-language-server --stdio"), "other");
+
+  // A genuine one-shot build still classifies as toolchain.
+  assert.equal(kindOf("/repo/node_modules/.bin/tsc --noEmit"), "toolchain");
+});
+
 test("processName survives executables with spaces in their path", () => {
   // Regression: splitting argv on whitespace turned the user's Chrome into
   // "/Applications/Google", so the row read "Google (25 processes)".

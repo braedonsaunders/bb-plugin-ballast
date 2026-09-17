@@ -990,9 +990,9 @@ export default async function plugin(bb: BbPluginApi) {
     name: "ballast_plan",
     description:
       "List processes that can be stopped to free memory, with byte counts and the ids ballast_relieve " +
-      "takes. Candidates are graded safe (idle headless browsers, orphaned servers, finished test " +
-      "runners) or disruptive (still doing work), and anything protected is listed with the reason it " +
-      "was refused.",
+      "takes. Candidates are graded safe only when nothing can still be waiting on them — orphaned, " +
+      "or an abandoned headless browser — and disruptive otherwise. Anything protected is listed " +
+      "with the reason it was refused.",
     presentation: {
       label: { pending: "Planning memory relief", completed: "Planned memory relief" },
     },

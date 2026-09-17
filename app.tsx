@@ -255,6 +255,7 @@ function BallastPage() {
                 hint="worktree paths matched to threads"
                 consumers={data.threads}
                 emptyMessage="No thread-owned processes."
+                showComposition
               />
               <AttributionNote />
             </>

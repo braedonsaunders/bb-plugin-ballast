@@ -147,12 +147,16 @@ function isIdle(consumer: Consumer, config: RelieveConfig): boolean {
 }
 
 function isDisposable(consumer: Consumer, config: RelieveConfig): boolean {
+  // Idle is only evidence of abandonment for a headless browser, whose whole
+  // existence is a single test run: nothing drives one between suites, and a
+  // driver that finished usually left it behind.
+  //
+  // For everything else, an alive parent means someone is holding the process
+  // and idle means "waiting for its next request". A build tool sitting at 0%
+  // is the normal state of a worker pool, not a corpse — grading that as safe
+  // is how this plugin once killed BB's own esbuild service.
   if (consumer.kind === "browser-automation") return isOrphan(consumer) || isIdle(consumer, config);
-  if (consumer.kind === "dev-server") return isOrphan(consumer);
-  if (consumer.kind === "test-runner" || consumer.kind === "toolchain") {
-    return isOrphan(consumer) || isIdle(consumer, config);
-  }
-  return false;
+  return isOrphan(consumer);
 }
 
 function rationaleFor(consumer: Consumer, config: RelieveConfig): string {

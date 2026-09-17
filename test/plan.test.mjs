@@ -89,12 +89,25 @@ test("an idle dev server is NOT safe — idle is a server's resting state", () =
   assert.equal(riskOf(planFor(orphanServer, { kind: "dev-server", ppid: 1 })), "safe");
 });
 
-test("a finished test runner is safe; one still running is not", () => {
-  const done = { kind: "test-runner", cpuPercent: 0, ageSeconds: 3600 };
-  assert.equal(riskOf(planFor(done, { kind: "test-runner" })), "safe");
+test("an orphaned test runner is safe; an idle one with a live parent is not", () => {
+  const orphan = { kind: "test-runner", cpuPercent: 0, ageSeconds: 3600, parentPid: 1 };
+  assert.equal(riskOf(planFor(orphan, { kind: "test-runner", ppid: 1 })), "safe");
 
-  const running = { kind: "test-runner", cpuPercent: 95, ageSeconds: 3600 };
-  assert.equal(riskOf(planFor(running, { kind: "test-runner" })), "disruptive");
+  // Idle with a live parent means something is awaiting its exit code.
+  const idle = { kind: "test-runner", cpuPercent: 0, ageSeconds: 3600 };
+  assert.equal(riskOf(planFor(idle, { kind: "test-runner" })), "disruptive");
+});
+
+test("an idle build tool with a live parent is NOT safe", () => {
+  // Regression, and the worst bug this plugin has had. Grading "idle build
+  // tool" as safe made Ballast terminate BB's own `esbuild --service`, which
+  // sits at 0% CPU between requests by design. Every plugin install after that
+  // failed with "The service is no longer running" until BB was restarted.
+  const idleTool = { kind: "toolchain", cpuPercent: 0, ageSeconds: 7200 };
+  assert.equal(riskOf(planFor(idleTool, { kind: "toolchain" })), "disruptive");
+
+  const orphanTool = { kind: "toolchain", cpuPercent: 0, ageSeconds: 7200, parentPid: 1 };
+  assert.equal(riskOf(planFor(orphanTool, { kind: "toolchain", ppid: 1 })), "safe");
 });
 
 test("safeBytes counts only the safe terminate candidates", () => {

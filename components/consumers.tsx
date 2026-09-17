@@ -45,12 +45,24 @@ function ConsumerRow({
   max,
   onSelect,
   selected,
+  showComposition,
 }: {
   consumer: Consumer;
   max: number;
   onSelect?: (consumer: Consumer) => void;
   selected?: boolean;
+  /** Thread rows: what the thread is holding, broken down by process tree. */
+  showComposition?: boolean;
 }) {
+  // A thread row's label *is* the thread title, so repeating it as the caption
+  // renders "Fleet8 w1 — e2e project cost-to-cash · Fleet8 w1 — e2e project
+  // cost-to-cash". Show the caption only when it says something new.
+  const caption =
+    showComposition === true
+      ? consumer.detail
+      : consumer.threadTitle !== null && consumer.threadTitle !== consumer.label
+        ? `· ${consumer.threadTitle}`
+        : null;
   const interactive = onSelect !== undefined;
   return (
     <li>
@@ -77,12 +89,13 @@ function ConsumerRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
             <span className="truncate text-sm">{consumer.label}</span>
-            {consumer.threadTitle === null ? null : (
-              <span className="truncate text-xs text-muted-foreground">
-                · {consumer.threadTitle}
-              </span>
+            {caption === null || showComposition === true ? null : (
+              <span className="truncate text-xs text-muted-foreground">{caption}</span>
             )}
           </div>
+          {showComposition === true && caption !== null && caption !== "" ? (
+            <div className="truncate text-xs text-muted-foreground">{caption}</div>
+          ) : null}
           <SizeBar bytes={consumer.bytes} max={max} className="mt-1" />
         </div>
         <div className="shrink-0 text-right">
@@ -102,11 +115,13 @@ export function ConsumerList({
   hint,
   consumers,
   emptyMessage,
+  showComposition,
 }: {
   title: string;
   hint?: string;
   consumers: readonly Consumer[];
   emptyMessage: string;
+  showComposition?: boolean;
 }) {
   const max = Math.max(...consumers.map((row) => row.bytes), 1);
   return (
@@ -122,7 +137,12 @@ export function ConsumerList({
       ) : (
         <ul className="mt-1.5 space-y-0.5">
           {consumers.map((consumer) => (
-            <ConsumerRow key={consumer.id} consumer={consumer} max={max} />
+            <ConsumerRow
+              key={consumer.id}
+              consumer={consumer}
+              max={max}
+              showComposition={showComposition}
+            />
           ))}
         </ul>
       )}
