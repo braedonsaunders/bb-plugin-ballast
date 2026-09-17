@@ -208,10 +208,19 @@ export default async function plugin(bb: BbPluginApi) {
       label: "Ask the hungriest threads to release memory",
       default: false,
     },
+    /**
+     * Off by default, like every other rung.
+     *
+     * Escalation destroys nothing, but it spawns a thread and spends tokens,
+     * and doing that uninvited on a machine someone just installed a memory
+     * monitor on is its own kind of surprise. It also cannot work until an
+     * escalation project is chosen, so defaulting it on mostly produced a
+     * banner and a log line saying it had been suppressed.
+     */
     agentEscalation: {
       type: "boolean",
       label: "Hand the problem to an agent when critical",
-      default: true,
+      default: false,
     },
     escalationProject: { type: "project", label: "Project for escalation threads" },
   });
