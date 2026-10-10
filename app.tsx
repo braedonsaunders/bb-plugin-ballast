@@ -13,6 +13,7 @@ import { HistoryChart, PressureBand, StatTile } from "@/components/meter";
 import { AttributionNote, ConsumerList, EmptyState, KindBand } from "@/components/consumers";
 import { ReliefPanel } from "@/components/relief-panel";
 import { SettingsPanel } from "@/components/settings-panel";
+import { publishRailReading, railIcon } from "@/components/rail-icon";
 import { formatAgo, formatBytes, formatPercent } from "@/lib/format";
 import { levelIcon, levelTone, toneFill, toneText, toneTrack } from "@/lib/ui";
 import type { Overview, Plan, Pressure, ReliefResult } from "@/lib/contract";
@@ -29,6 +30,9 @@ import type { rpcContract } from "./server";
  * exactly the behaviour this plugin exists to catch other programs doing.
  */
 const OVERVIEW_POLL_MS = 30_000;
+
+/** The panel's rail icon: the Weight glyph with the live RAM-used badge. */
+const RAIL_ICON = "ballast-rail";
 
 /* ------------------------------------------------------------------ */
 /* data                                                                */
@@ -310,18 +314,26 @@ function PanelHeaderActions() {
 /* compact surfaces                                                    */
 /* ------------------------------------------------------------------ */
 
-/** Sidebar row accessory: the one number worth carrying everywhere. */
-function SidebarPressure() {
+/**
+ * Feeds the navigation-rail badge. Renders nothing; it exists because it is a
+ * slot with plugin context, which the rail icon itself is not.
+ */
+function RailFeed() {
   const rpc = useRpc<typeof rpcContract>();
-  const [percent, setPercent] = useState<number | null>(null);
-  const [tone, setTone] = useState<ReturnType<typeof levelTone>>("neutral");
 
   const load = useCallback(() => {
     rpc.call("pressure").then(
       (pressure: Pressure) => {
         const { sample } = pressure;
-        setPercent(sample.totalBytes > 0 ? sample.usedBytes / sample.totalBytes : 0);
-        setTone(levelTone(pressure.level));
+        publishRailReading({
+          fraction: sample.totalBytes > 0 ? sample.usedBytes / sample.totalBytes : 0,
+          tone:
+            pressure.level === "critical"
+              ? "critical"
+              : pressure.level === "warn"
+                ? "warn"
+                : "calm",
+        });
       },
       () => {},
     );
@@ -330,19 +342,14 @@ function SidebarPressure() {
   useEffect(() => {
     load();
     const timer = window.setInterval(load, 60_000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      publishRailReading(null);
+    };
   }, [load]);
   useRealtime("pressure", load);
 
-  if (percent === null) return null;
-  return (
-    // text-xs matches the Reclaim and Provider Usage sidebar indicators, so the
-    // three plugins' numbers sit at the same weight rather than one looking
-    // like a footnote to the others.
-    <span className={cn("text-xs font-medium tabular-nums", toneText[tone])}>
-      {formatPercent(percent)}
-    </span>
-  );
+  return null;
 }
 
 function HomepageMemory() {
@@ -392,14 +399,15 @@ function HomepageMemory() {
 }
 
 export default definePluginApp((app) => {
+  app.experimental_icons.register({ name: RAIL_ICON, component: railIcon("Weight") });
+  app.slots.experimental_appOverlay({ id: "rail-feed", component: RailFeed });
   app.slots.navPanel({
     id: "ballast",
     title: "Ballast",
-    icon: "Weight",
+    icon: RAIL_ICON,
     path: "ballast",
     component: BallastPage,
     headerContent: PanelHeaderActions,
-    experimental_sidebarAccessory: SidebarPressure,
   });
   app.slots.homepageSection({
     id: "memory",

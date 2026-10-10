@@ -11,8 +11,9 @@ it, and how to shed load before the machine starts paging.
 bb plugin install bb-plugin-ballast
 ```
 
-Ballast appears in the sidebar with the current percentage, adds a **Ballast**
-panel, and registers `bb ballast` plus three agent tools.
+Ballast's icon in the navigation rail carries the current RAM-used percentage
+as a small badge (muted, then red, then a filled red pill as pressure climbs),
+adds a **Ballast** panel, and registers `bb ballast` plus three agent tools.
 
 ## Why not just read `memory_pressure`
 
