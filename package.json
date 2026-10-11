@@ -1,6 +1,6 @@
 {
   "name": "bb-plugin-ballast",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Physical memory pressure, attributed to process trees and BB threads, with a graded intervention ladder.",
   "license": "MIT",
   "author": "Braedon Saunders",

@@ -13,6 +13,7 @@ import {
   parseMeminfo,
   parseSwapUsage,
   parseVmStat,
+  swapCounters,
 } from "../lib/memory.ts";
 
 const VM_STAT = `Mach Virtual Memory Statistics: (page size of 16384 bytes)
@@ -49,6 +50,21 @@ test("the derived numbers agree with what top reported at the same instant", () 
   // top said: 3069M wired, 6029M compressor.
   assert.ok(Math.abs(gib("pages wired down") - 3069 / 1024) < 0.05);
   assert.ok(Math.abs(gib("pages occupied by compressor") - 6029 / 1024) < 0.05);
+});
+
+test("swapCounters ignores file page-ins when swap is idle", () => {
+  // A machine with no swap in use: Swapins is 0, Pageins is millions of file
+  // faults. Falling back on Pageins graded this as 700 MB/min "from swap".
+  const { pages } = parseVmStat(`Mach Virtual Memory Statistics: (page size of 16384 bytes)
+Pageins:                                     3769713.
+Pageouts:                                      14878.
+Swapins:                                           0.
+Swapouts:                                          0.
+`);
+  assert.deepEqual(swapCounters(pages), { swapInPages: 0, swapOutPages: 0 });
+
+  const { pages: busy } = parseVmStat(VM_STAT);
+  assert.deepEqual(swapCounters(busy), { swapInPages: 1499821, swapOutPages: 2314393 });
 });
 
 test("parseSwapUsage handles the sysctl format and its units", () => {

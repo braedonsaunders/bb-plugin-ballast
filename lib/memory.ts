@@ -78,6 +78,21 @@ export function parseKernelPressure(text: string): MemorySample["kernelPressure"
   return null;
 }
 
+/**
+ * The swap traffic counters, in pages.
+ *
+ * Swapins/Swapouts only. Pageins counts every file-backed page fault —
+ * launching a binary, reading an mmap'd file, refilling the file cache — and
+ * runs at hundreds of MB a minute on a healthy machine with no swap at all.
+ * A zero swap counter is a real zero, so test for the key rather than falling
+ * back on falsiness; Pageins is only a stand-in when vm_stat has no swap rows.
+ */
+export function swapCounters(pages: Map<string, number>): { swapInPages: number; swapOutPages: number } {
+  const pick = (swap: string, page: string): number =>
+    pages.has(swap) ? (pages.get(swap) ?? 0) : (pages.get(page) ?? 0);
+  return { swapInPages: pick("swapins", "pageins"), swapOutPages: pick("swapouts", "pageouts") };
+}
+
 function rate(current: number, previous: number, elapsedMs: number, pageSize: number): number {
   // A counter that went backwards means the machine rebooted or the cursor is
   // from a previous plugin load. Report nothing rather than a fabricated spike.
@@ -122,8 +137,7 @@ async function sampleDarwin(previous: RateCursor | null): Promise<SampleResult> 
 
   const cursor: RateCursor = {
     atMs: Date.now(),
-    swapInPages: get("swapins") || get("pageins"),
-    swapOutPages: get("swapouts") || get("pageouts"),
+    ...swapCounters(pages),
     pageSize,
   };
   const elapsedMs = previous === null ? 0 : cursor.atMs - previous.atMs;
